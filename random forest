@@ -1,0 +1,130 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, learning_curve
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+# Load the data
+def load_data(filepath):
+    data = pd.read_csv(filepath)
+    data.drop(columns=['Timestamp'], inplace=True)
+    data['self_employed'] = data['self_employed'].fillna(data['self_employed'].mode()[0])
+    return data
+
+
+# Preprocess the data
+def preprocess_data(data):
+    return pd.get_dummies(data, drop_first=True)
+
+
+# Split data into training and testing sets
+def split_data(data_encoded):
+    X = data_encoded.drop('Growing_Stress_Yes', axis=1)
+    y = data_encoded['Growing_Stress_Yes']
+    return train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+# Train the model
+def train_model(X_train, y_train):
+    rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train)
+    return rf_model
+
+
+# Evaluate the model
+def evaluate_model(rf_model, X_test, y_test):
+    y_pred = rf_model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"Model Accuracy: {accuracy:.4f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+    return accuracy, y_pred
+
+
+# Plot confusion matrix
+def plot_confusion_matrix(y_test, y_pred):
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title('Confusion Matrix')
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.show()
+
+
+# Plot learning curve
+def plot_learning_curve(X, y):
+    train_sizes, train_scores, test_scores = learning_curve(
+        RandomForestClassifier(n_estimators=100, random_state=42), X, y,
+        cv=5, n_jobs=-1, train_sizes=np.linspace(0.1, 1.0, 10))
+
+    train_mean = np.mean(train_scores, axis=1)
+    train_std = np.std(train_scores, axis=1)
+    test_mean = np.mean(test_scores, axis=1)
+    test_std = np.std(test_scores, axis=1)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(train_sizes, train_mean, label='Training score')
+    plt.plot(train_sizes, test_mean, label='Cross-validation score')
+    plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, alpha=0.1)
+    plt.fill_between(train_sizes, test_mean - test_std, test_mean + test_std, alpha=0.1)
+    plt.title('Learning Curve')
+    plt.xlabel('Training Examples')
+    plt.ylabel('Score')
+    plt.legend(loc='best')
+    plt.grid(True)
+    plt.show()
+
+
+# Predict function for customer input
+def predict_growing_stress(rf_model, X_columns, input_data):
+    template_df = pd.DataFrame(columns=X_columns)
+    template_df.loc[0] = 0
+    input_df = pd.get_dummies(pd.DataFrame([input_data]))
+    for column in input_df.columns:
+        if column in template_df.columns:
+            template_df.at[0, column] = input_df.at[0, column].astype(template_df[column].dtype)
+    prediction = rf_model.predict(template_df)
+    return "Yes" if prediction[0] == 1 else "No"
+
+
+# Main function to run the program
+def main():
+    data = load_data('Dataset.csv')
+    data_encoded = preprocess_data(data)
+    X_train, X_test, y_train, y_test = split_data(data_encoded)
+
+    rf_model = train_model(X_train, y_train)
+    accuracy, y_pred = evaluate_model(rf_model, X_test, y_test)
+
+    plot_confusion_matrix(y_test, y_pred)
+    plot_learning_curve(X_train, y_train)
+
+    # Example input from a customer
+    input_data = {
+        'Gender': 'Female',
+        'Country': 'United States',
+        'Occupation': 'Corporate',
+        'self_employed': 'No',
+        'family_history': 'No',
+        'treatment': 'Yes',
+        'Days_Indoors': '1-14 days',
+        'Changes_Habits': 'No',
+        'Mental_Health_History': 'Yes',
+        'Mood_Swings': 'Medium',
+        'Coping_Struggles': 'No',
+        'Work_Interest': 'No',
+        'Social_Weakness': 'Yes',
+        'mental_health_interview': 'No',
+        'care_options': 'Not sure'
+    }
+
+    result = predict_growing_stress(rf_model, X_train.columns, input_data)
+    print("Prediction of Growing Stress:", result)
+
+
+if __name__ == '__main__':
+    main()
